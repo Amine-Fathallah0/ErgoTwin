@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# Local editor and assistant settings.
+.claude/
+.vscode/
+.idea/
+# Model weights and video clips are large and are fetched or supplied locally.
+models/
+videos/*
+!videos/README.md

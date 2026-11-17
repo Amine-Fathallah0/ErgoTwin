@@ -1,0 +1,63 @@
+# ErgoTwin camera module settings.
+# Every value below is the default. Change what you need, then restart the app.
+
+[pose]
+model = "yolo26m-pose.pt"   # smaller and faster: "yolo26s-pose.pt", "yolo26n-pose.pt"
+device = "auto"             # "auto" uses the GPU when there is one; "cpu" forces the CPU
+imgsz = 1280                # size the model works at; 640 is faster but misses small, distant people
+conf = 0.35                 # how sure the model must be before it starts following a person
+keypoint_conf = 0.5         # how sure it must be about a joint before the joint is used
+half = true                 # half precision on the GPU (faster, same result)
+max_people = 40
+track_memory_frames = 45    # a worker hidden for a moment keeps their number for this many frames
+max_width = 1280            # wider frames are scaled down before processing
+
+[station]
+# What the camera cannot see. Set these for the workstation being watched.
+seated = false              # seated work: bent knees are not penalised
+load_kg = 0.0               # weight handled: under 5 kg adds 0, 5 to 10 kg adds 1, over 10 kg adds 2
+shock = false               # shock or rapid build-up of force: adds 1
+coupling = 0                # grip: 0 good, 1 fair, 2 poor, 3 unacceptable
+wrist_score = 1             # 1 neutral, 2 bent over 15 degrees, 3 bent and twisted
+arm_supported = false       # arm supported, or the worker is leaning: subtracts 1
+repeated_actions = false    # small actions repeated more than 4 times a minute: adds 1
+rapid_changes = false       # rapid large posture changes or an unstable base: adds 1
+
+[angles]
+upright_tol_deg = 5.0         # a trunk within this of vertical counts as upright
+side_bend_deg = 15.0          # trunk bent sideways beyond this adds 1 to the REBA part score
+neck_side_bend_deg = 25.0     # same for the neck, which is short and so noisier
+neck_neutral_deg = 10.0       # how far the ear sits ahead of the shoulder in a neutral neck
+neck_extension_deg = 15.0     # neck tilted back beyond this counts as extension
+abduction_deg = 45.0          # arm lifted sideways beyond this counts as abducted
+front_view_ratio = 0.55       # shoulder width / torso length above this: worker faces the camera
+side_view_ratio = 0.30        # below this: worker is seen from the side
+foreshortening = true         # read a short-looking torso as a bend toward the camera
+foreshortening_min_deg = 25.0 # ignore smaller such bends: they are within the noise
+smoothing = 0.5               # weight of the newest frame: 1 = no smoothing, lower = smoother
+min_person_px = 50.0          # people smaller than this in the picture are not measured
+min_neck_px = 25.0            # the neck is measured only when it is at least this long in the picture
+
+[camera]
+# A ceiling camera looks down, so upright people lean and look squashed in its picture.
+# The app corrects for that. It can learn the tilt from the workers, or you can give it.
+auto_vertical = true    # learn which way is "up" in the picture from the workers themselves
+tilt_deg = -1.0         # how far the camera looks down, if you know it (0 = level); -1 = learn it
+hfov_deg = 60.0         # the lens's horizontal field of view; matters only for cameras that look down
+
+[timing]
+debounce_s = 0.6        # a new posture must last this long before it counts
+lost_grace_s = 1.0      # keep the timer running through detection gaps this short
+bad_hold_s = 5.0        # flag a bad posture held this long
+caution_hold_s = 60.0   # flag a caution posture held this long
+cooldown_s = 20.0       # minimum time between two flags for the same body region
+static_s = 60.0         # REBA adds 1 when a posture is held this long
+track_timeout_s = 3.0   # forget a worker not seen for this long
+min_track_s = 1.0       # show a worker only once followed this long: brief false detections stay out
+
+[levels]
+# REBA part score at which a region turns [caution, bad].
+back = [3, 4]        # trunk: 3 = bent 20 to 60 degrees, 4 = bent over 60 degrees
+neck = [2, 3]        # neck: 2 = bent over 20 degrees, 3 = bent and tilted sideways
+shoulders = [3, 4]   # upper arm: 3 = lifted 45 to 90 degrees, 4 = above shoulder height
+knees = [2, 3]       # legs: 2 = knees bent 30 to 60 degrees, 3 = bent over 60 degrees

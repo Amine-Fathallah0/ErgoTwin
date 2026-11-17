@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ErgoTwin camera</title>
+<style>
+  :root {
+    --bg: #0e1217; --panel: #161b22; --line: #2a313c; --text: #e9edf2; --muted: #96a2b2;
+    --safe: #2fbf71; --caution: #f5a524; --bad: #ef4444; --unknown: #6b7280; --accent: #4c9aff;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  header { display: flex; align-items: center; gap: 14px; padding: 12px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  h1 span { color: var(--muted); font-weight: 400; }
+  .chip { display: inline-flex; align-items: center; gap: 7px; padding: 3px 11px; border-radius: 999px; border: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+  .chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--unknown); }
+  .chip.running::before { background: var(--safe); }
+  .chip.loading::before, .chip.connecting::before { background: var(--caution); }
+  .chip.error::before, .chip.ended::before { background: var(--bad); }
+  .spacer { flex: 1; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .controls { display: flex; gap: 10px; padding: 12px 20px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid var(--line); background: var(--panel); }
+  select, input[type=text], input[type=number] { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; font: inherit; }
+  input[type=text] { flex: 1; min-width: 280px; max-width: 520px; }
+  input[type=number] { width: 80px; }
+  button { font: inherit; border-radius: 6px; padding: 7px 16px; border: 1px solid var(--line); background: var(--bg); color: var(--text); cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #06121f; font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  label.toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; cursor: pointer; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 16px; padding: 16px 20px; align-items: start; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+  .video { background: #000; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .video img { display: block; width: 100%; height: auto; max-height: calc(100vh - 200px); object-fit: contain; }
+  .side { display: flex; flex-direction: column; gap: 16px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+  .empty { color: var(--muted); font-size: 14px; }
+  .card { border: 1px solid var(--line); border-left: 5px solid var(--unknown); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; background: var(--bg); }
+  .card:last-child { margin-bottom: 0; }
+  .card.compact { padding: 6px 12px; margin-bottom: 6px; }
+  .workers { max-height: 56vh; overflow: auto; }
+  .card.safe { border-left-color: var(--safe); }
+  .card.caution { border-left-color: var(--caution); }
+  .card.bad { border-left-color: var(--bad); }
+  .card.flagged { box-shadow: 0 0 0 1px var(--bad) inset; }
+  .card-head { display: flex; align-items: center; gap: 8px; }
+  .who { font-weight: 600; font-size: 16px; }
+  .badge { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 4px; color: #0b0f14; background: var(--unknown); }
+  .badge.safe { background: var(--safe); }
+  .badge.caution { background: var(--caution); }
+  .badge.bad { background: var(--bad); color: #fff; }
+  .reba { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+  .posture { margin: 6px 0 8px; font-size: 15px; }
+  .row { display: grid; grid-template-columns: 12px 80px 1fr auto; gap: 8px; align-items: center; padding: 3px 0; font-size: 14px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--unknown); }
+  .dot.safe { background: var(--safe); }
+  .dot.caution { background: var(--caution); }
+  .dot.bad { background: var(--bad); }
+  .row .name, .row .time { color: var(--muted); }
+  .row .time { font-variant-numeric: tabular-nums; }
+  .row.flagged .time { color: var(--bad); font-weight: 700; }
+  .flags { max-height: 280px; overflow: auto; }
+  .flag { padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .flag:last-child { border-bottom: 0; }
+  .flag time { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 8px; }
+  .flag .pod { color: var(--muted); }
+  footer { padding: 0 20px 18px; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>ErgoTwin <span>camera module</span></h1>
+  <span id="status" class="chip idle">Idle</span>
+  <span class="spacer"></span>
+  <span id="meta" class="meta"></span>
+</header>
+
+<div class="controls">
+  <select id="kind" aria-label="Source type">
+    <option value="file">Video file</option>
+    <option value="webcam">Webcam</option>
+    <option value="url">Stream URL</option>
+  </select>
+  <select id="file" aria-label="Video file"></select>
+  <input id="webcam" type="number" min="0" value="0" aria-label="Webcam number" hidden>
+  <input id="url" type="text" placeholder="udp://127.0.0.1:5000 or rtsp://camera/stream" aria-label="Stream URL" hidden>
+  <button id="start" class="primary">Start</button>
+  <button id="stop">Stop</button>
+  <label class="toggle"><input id="privacy" type="checkbox"> Skeleton only</label>
+  <label class="toggle"><input id="seated" type="checkbox"> Seated work</label>
+  <label class="toggle">Flag bad after <input id="badHold" type="number" min="1" max="600" step="1"> s,</label>
+  <label class="toggle">caution after <input id="cautionHold" type="number" min="1" max="3600" step="1"> s</label>
+</div>
+
+<main>
+  <div class="video"><img id="video" src="/video" alt="Live video with worker skeletons"></div>
+  <div class="side">
+    <section>
+      <h2 id="workersTitle">Workers</h2>
+      <div id="workers" class="workers"><div class="empty">No workers in view.</div></div>
+    </section>
+    <section>
+      <h2>Flags</h2>
+      <div id="flags" class="flags"><div class="empty">No flags yet.</div></div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  Angles are estimated from one 2D camera and are most accurate when the worker is seen from the side.
+  Wrists are not measured by this pose model. Colours follow the REBA score of each body part.
+  The whole-body REBA score also counts load and grip, which are set per station in config.toml.
+</footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const REGION_NAMES = { back: "Back", neck: "Neck", shoulders: "Shoulders", knees: "Knees" };
+const STATUS_NAMES = { idle: "Idle", loading: "Loading model", connecting: "Connecting", running: "Live", ended: "Stream ended", error: "Error" };
+
+let flagsShown = "";
+let togglesSynced = false;
+
+function clock(seconds) {
+  const s = Math.floor(seconds);
+  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+}
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+async function post(url, body) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+  if (!response.ok) {
+    const problem = await response.json().catch(() => ({}));
+    throw new Error(problem.detail || response.statusText);
+  }
+  return response.json();
+}
+
+function showSourceInput() {
+  const kind = $("kind").value;
+  $("file").hidden = kind !== "file";
+  $("webcam").hidden = kind !== "webcam";
+  $("url").hidden = kind !== "url";
+}
+
+function chosenSource() {
+  const kind = $("kind").value;
+  if (kind === "file") return $("file").value;
+  if (kind === "webcam") return String($("webcam").value);
+  return $("url").value.trim();
+}
+
+async function loadVideos() {
+  const files = await (await fetch("/videos")).json();
+  const select = $("file");
+  select.replaceChildren();
+  if (!files.length) {
+    const none = el("option", "", "No clips in the videos folder");
+    none.value = "";
+    select.append(none);
+    return;
+  }
+  for (const file of files) {
+    const option = el("option", "", file.replace("videos/", ""));
+    option.value = file;
+    select.append(option);
+  }
+}
+
+const CROWD = 5;  // with more workers than this, the safe ones get one line each
+const LEVEL_RANK = { bad: 2, caution: 1, safe: 0 };
+
+function workerCard(w, compact) {
+  const level = w.level || "unknown";
+  const card = el("div", "card " + level + (w.flagged ? " flagged" : "") + (compact ? " compact" : ""));
+
+  const head = el("div", "card-head");
+  head.append(
+    el("span", "who", "Worker " + w.id),
+    el("span", "badge " + level, (w.level || "not visible").toUpperCase()),
+  );
+  card.append(head);
+  if (compact) return card;
+
+  const alert = w.level === "caution" || w.level === "bad";
+  card.append(el("div", "posture", w.posture + (alert ? " for " + clock(w.held_s) : "")));
+
+  for (const [key, name] of Object.entries(REGION_NAMES)) {
+    const r = w.regions[key];
+    if (!r) continue;
+    const row = el("div", "row" + (r.flagged ? " flagged" : ""));
+    row.append(
+      el("span", "dot " + (r.level || "unknown")),
+      el("span", "name", name),
+      el("span", "label", r.label),
+      el("span", "time", r.level ? clock(r.held_s) + (r.flagged ? " FLAG" : "") : "–"),
+    );
+    card.append(row);
+  }
+  // The badge above is the worst body region; this line is the score for the whole body.
+  card.append(el("div", "reba", "Whole-body REBA " + w.reba.score + " · " + w.reba.risk + " risk"
+    + (w.reba.complete ? "" : " (partial view)")));
+  return card;
+}
+
+function flagItem(f) {
+  const item = el("div", "flag");
+  item.append(
+    el("time", "", f.clock),
+    document.createTextNode(f.message + " "),
+    el("span", "pod", "· pod: " + f.pulses + (f.pulses === 1 ? " pulse" : " pulses")),
+  );
+  return item;
+}
+
+function render(state) {
+  const chip = $("status");
+  chip.className = "chip " + state.status;
+  const name = STATUS_NAMES[state.status] || state.status;
+  chip.textContent = state.status === "running" || !state.message ? name : name + ": " + state.message;
+
+  // The app works out how far the camera looks down from the people it sees.
+  const tilt = state.camera && state.camera.learned && state.camera.tilt_deg >= 10
+    ? " · camera looks down about " + state.camera.tilt_deg + "°" : "";
+  $("meta").textContent = state.status === "running"
+    ? state.source + " · " + Math.round(state.fps) + " fps · " + state.device + tilt
+    : "";
+
+  if (!togglesSynced) {
+    $("privacy").checked = state.privacy;
+    $("seated").checked = state.seated;
+    $("badHold").value = state.bad_hold_s;
+    $("cautionHold").value = state.caution_hold_s;
+    togglesSynced = true;
+  }
+
+  // Workers who need attention come first. In a crowd, safe workers take one line each.
+  const list = [...state.workers].sort((a, b) =>
+    (LEVEL_RANK[b.level] ?? -1) - (LEVEL_RANK[a.level] ?? -1) || a.id - b.id);
+  const count = (level) => list.filter((w) => w.level === level).length;
+  $("workersTitle").textContent = list.length
+    ? "Workers: " + list.length + " in view, " + count("bad") + " bad, " + count("caution") + " caution"
+    : "Workers";
+  const crowded = list.length > CROWD;
+  const workers = $("workers");
+  if (list.length) workers.replaceChildren(...list.map((w) => workerCard(w, crowded && w.level === "safe")));
+  else workers.replaceChildren(el("div", "empty", "No workers in view."));
+
+  // Redraw the flag list only when it changes, so scrolling it is not interrupted.
+  const key = state.flags.map((f) => f.t + ":" + f.worker + ":" + f.region).join("|");
+  if (key !== flagsShown) {
+    flagsShown = key;
+    const flags = $("flags");
+    if (state.flags.length) flags.replaceChildren(...state.flags.map(flagItem));
+    else flags.replaceChildren(el("div", "empty", "No flags yet."));
+  }
+}
+
+async function poll() {
+  try {
+    render(await (await fetch("/state")).json());
+  } catch {
+    $("status").className = "chip error";
+    $("status").textContent = "The app is not running";
+  }
+}
+
+$("kind").addEventListener("change", showSourceInput);
+
+$("start").addEventListener("click", async () => {
+  const source = chosenSource();
+  $("start").disabled = true;
+  try {
+    await post("/start", { source });
+  } catch (error) {
+    $("status").className = "chip error";
+    $("status").textContent = error.message;
+  } finally {
+    $("start").disabled = false;
+  }
+});
+
+$("stop").addEventListener("click", () => post("/stop"));
+$("privacy").addEventListener("change", (e) => post("/settings", { privacy: e.target.checked }));
+$("seated").addEventListener("change", (e) => post("/settings", { seated: e.target.checked }));
+$("badHold").addEventListener("change", (e) => post("/settings", { bad_hold_s: Number(e.target.value) }));
+$("cautionHold").addEventListener("change", (e) => post("/settings", { caution_hold_s: Number(e.target.value) }));
+
+showSourceInput();
+loadVideos();
+poll();
+setInterval(poll, 300);
+</script>
+</body>
+</html>

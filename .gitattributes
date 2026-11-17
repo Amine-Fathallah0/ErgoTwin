@@ -1,0 +1,5 @@
+# Normalise line endings in the repository; Windows scripts always get Windows line endings.
+* text=auto
+*.cmd text eol=crlf
+*.jpg binary
+*.png binary
