@@ -44,6 +44,16 @@ min_neck_px = 25.0            # the neck is measured only when it is at least th
 auto_vertical = true    # learn which way is "up" in the picture from the workers themselves
 tilt_deg = -1.0         # how far the camera looks down, if you know it (0 = level); -1 = learn it
 hfov_deg = 60.0         # the lens's horizontal field of view; matters only for cameras that look down
+# A recording that shows several camera views in a grid: analyse one view enlarged, or all of them.
+# "3x3:5" = a grid of 3 columns and 3 rows, tile 5 (counted left to right, then top to bottom).
+# "3x3:all" = every tile, each enlarged and analysed on its own (settings in [grid] below).
+tile = "whole"
+
+[grid]
+# Every tile of a grid recording at once ("3x3:all"). One tile alone uses the [pose] settings.
+model = "yolo26s-pose.pt"   # nine tiles per frame: the small model keeps it near 7 frames a second
+tile_width = 1088           # each tile is enlarged to this width first (960 loses half the people)
+conf = 0.25                 # lower than [pose]: people in a grid are small and the model is less sure
 
 [timing]
 debounce_s = 0.6        # a new posture must last this long before it counts

@@ -12,7 +12,7 @@ from .skeleton import Person
 _RANK = {None: -1, "safe": 0, "caution": 1, "bad": 2}
 
 
-def worker_view(worker_id: int, reba: RebaResult, timers: dict, view: str) -> dict:
+def worker_view(worker_id: int, reba: RebaResult, timers: dict, view: str, tile: int | None = None) -> dict:
     """Everything about one worker that the page, the dashboard and the pod need."""
     regions = {region: {**timers[region], "pulses": PULSES[region]} for region in REGIONS}
     worst = max(PRIORITY, key=lambda r: _RANK[regions[r]["level"]])  # ties go to the first in PRIORITY
@@ -25,6 +25,7 @@ def worker_view(worker_id: int, reba: RebaResult, timers: dict, view: str) -> di
         "held_s": regions[worst]["held_s"] if alert else 0.0,
         "flagged": any(r["flagged"] for r in regions.values()),
         "view": view,
+        "tile": tile,  # which tile of a grid recording the worker is in; None for a single picture
         "reba": {
             "score": reba.score, "risk": reba.risk, "trunk": reba.trunk, "neck": reba.neck, "legs": reba.legs,
             "upper_arm": reba.upper_arm, "lower_arm": reba.lower_arm, "wrist": reba.wrist,
@@ -36,13 +37,35 @@ def worker_view(worker_id: int, reba: RebaResult, timers: dict, view: str) -> di
     }
 
 
+class NumberPool:
+    """Small worker numbers: the lowest free one is handed out, and it is free again once its worker has left.
+
+    The tiles of a grid recording share one pool, so no two workers on screen get the same number.
+    """
+
+    def __init__(self):
+        self._taken: set[int] = set()
+
+    def take(self) -> int:
+        number = 1
+        while number in self._taken:
+            number += 1
+        self._taken.add(number)
+        return number
+
+    def release(self, numbers) -> None:
+        self._taken.difference_update(numbers)
+
+
 class Pipeline:
-    def __init__(self, cfg: Config):
+    def __init__(self, cfg: Config, numbers: NumberPool | None = None, tile: int | None = None):
         self.cfg = cfg
+        self.tile = tile  # the grid tile this pipeline watches, or None for a single picture
         self.monitor = PostureMonitor(cfg.timing)
         self.camera = VerticalField(cfg.camera)
         # The tracker's own ids only ever grow, and a busy scene burns through them. Workers are
         # shown under small numbers instead, and a number is free again once its worker has left.
+        self._pool = numbers or NumberPool()
         self._numbers: dict[int, int] = {}
         self._first_seen: dict[int, float] = {}
         self._references: dict[int, TorsoReference] = {}
@@ -75,23 +98,18 @@ class Pipeline:
             angles = self._smoothers.setdefault(wid, AngleSmoother(cfg.angles.smoothing)).apply(angles)
             number = self._numbers.get(wid)
             if number is None:
-                number = self._numbers[wid] = self._free_number()
+                number = self._numbers[wid] = self._pool.take()
             reba = score(angles, cfg.station, cfg.angles, static=self.monitor.is_static(number, t))
             levels = region_levels(reba, angles, cfg.levels)
-            self.monitor.update(t, number, levels, describe(angles, cfg.angles), clock=clock)
-            views[wid] = worker_view(number, reba, self.monitor.view(number, t), angles.view)
+            for flag in self.monitor.update(t, number, levels, describe(angles, cfg.angles), clock=clock):
+                flag["tile"] = self.tile
+            views[wid] = worker_view(number, reba, self.monitor.view(number, t), angles.view, self.tile)
 
         gone = set(self.monitor.prune(t))
+        self._pool.release(gone)
         self._numbers = {wid: n for wid, n in self._numbers.items() if n not in gone}
         in_view = {person.track_id for person in people}
         for store in (self._first_seen, self._references, self._smoothers):
             for wid in [w for w in store if w not in in_view and w not in self._numbers]:
                 del store[wid]
         return views
-
-    def _free_number(self) -> int:
-        taken = set(self._numbers.values())
-        number = 1
-        while number in taken:
-            number += 1
-        return number

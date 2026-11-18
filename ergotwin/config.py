@@ -56,6 +56,16 @@ class CameraConfig:
     auto_vertical: bool = True  # learn which way is "up" in the picture from the workers themselves
     tilt_deg: float = -1.0  # how far the camera looks down, if you know it (0 = level); -1 = learn it
     hfov_deg: float = 60.0  # the lens's horizontal field of view; matters only for cameras that look down
+    tile: str = "whole"  # a grid recording: "3x3:5" analyses tile 5 of a 3 x 3 grid, "3x3:all" every tile
+
+
+@dataclass
+class GridConfig:
+    """How every tile of a grid recording is analysed at once ("3x3:all"). One tile alone uses [pose]."""
+
+    model: str = "yolo26s-pose.pt"  # nine tiles per frame: the small model keeps it near 7 frames a second
+    tile_width: int = 1088  # each tile is enlarged to this width before the model looks at it
+    conf: float = 0.25  # lower than [pose]: people in a grid are small and the model is less sure of them
 
 
 @dataclass
@@ -81,6 +91,7 @@ class Config:
     station: StationConfig = field(default_factory=StationConfig)
     angles: AngleConfig = field(default_factory=AngleConfig)
     camera: CameraConfig = field(default_factory=CameraConfig)
+    grid: GridConfig = field(default_factory=GridConfig)
     timing: TimingConfig = field(default_factory=TimingConfig)
     levels: dict[str, list[int]] = field(default_factory=_default_levels)
 

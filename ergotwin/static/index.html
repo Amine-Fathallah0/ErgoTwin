@@ -3,143 +3,378 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ErgoTwin camera</title>
+<title>ErgoTwin · Posture camera</title>
 <style>
+  /* One screen, no page scroll on a laptop: video and alerts on the left,
+     summary, the selected worker and the worker list on the right.
+     System fonts only, so the page looks the same offline. */
   :root {
-    --bg: #0e1217; --panel: #161b22; --line: #2a313c; --text: #e9edf2; --muted: #96a2b2;
-    --safe: #2fbf71; --caution: #f5a524; --bad: #ef4444; --unknown: #6b7280; --accent: #4c9aff;
+    --bg: #e8ecef;
+    --panel: #ffffff;
+    --panel-2: #f4f6f8;
+    --line: #d6dde2;
+    --ink: #111a20;
+    --ink-2: #4a5862;
+    --ink-3: #7c8992;
+    --accent: #1f5fbf;
+    --safe: #1c9a53;
+    --caution: #c98200;
+    --bad: #d63a3a;
+    --unknown: #a3adb4;
+    --safe-bg: #e3f4ea;
+    --caution-bg: #fcf0d9;
+    --bad-bg: #fce4e4;
+    --unknown-bg: #eef1f3;
+    --video-bg: #0b0f12;
+    --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, "SF Mono", Menlo, monospace;
+    color-scheme: light;
   }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0f13; --panel: #131a20; --panel-2: #19222a; --line: #26313a;
+      --ink: #e6ecf1; --ink-2: #a2b0bb; --ink-3: #72808b; --accent: #72a6ff;
+      --safe: #3fcb80; --caution: #f0a83c; --bad: #f36a6a; --unknown: #5d6a74;
+      --safe-bg: #11301f; --caution-bg: #33260f; --bad-bg: #3a1818; --unknown-bg: #1c252d;
+      color-scheme: dark;
+    }
+  }
+
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 "Segoe UI", system-ui, -apple-system, sans-serif; }
-  header { display: flex; align-items: center; gap: 14px; padding: 12px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-  h1 { margin: 0; font-size: 18px; font-weight: 600; }
-  h1 span { color: var(--muted); font-weight: 400; }
-  .chip { display: inline-flex; align-items: center; gap: 7px; padding: 3px 11px; border-radius: 999px; border: 1px solid var(--line); font-size: 13px; color: var(--muted); }
-  .chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--unknown); }
-  .chip.running::before { background: var(--safe); }
-  .chip.loading::before, .chip.connecting::before { background: var(--caution); }
-  .chip.error::before, .chip.ended::before { background: var(--bad); }
-  .spacer { flex: 1; }
-  .meta { color: var(--muted); font-size: 13px; }
-  .controls { display: flex; gap: 10px; padding: 12px 20px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid var(--line); background: var(--panel); }
-  select, input[type=text], input[type=number] { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; font: inherit; }
-  input[type=text] { flex: 1; min-width: 280px; max-width: 520px; }
-  input[type=number] { width: 80px; }
-  button { font: inherit; border-radius: 6px; padding: 7px 16px; border: 1px solid var(--line); background: var(--bg); color: var(--text); cursor: pointer; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #06121f; font-weight: 600; }
-  button:disabled { opacity: .5; cursor: default; }
-  label.toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; cursor: pointer; }
-  main { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 16px; padding: 16px 20px; align-items: start; }
-  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
-  .video { background: #000; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-  .video img { display: block; width: 100%; height: auto; max-height: calc(100vh - 200px); object-fit: contain; }
-  .side { display: flex; flex-direction: column; gap: 16px; }
-  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
-  h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
-  .empty { color: var(--muted); font-size: 14px; }
-  .card { border: 1px solid var(--line); border-left: 5px solid var(--unknown); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; background: var(--bg); }
-  .card:last-child { margin-bottom: 0; }
-  .card.compact { padding: 6px 12px; margin-bottom: 6px; }
-  .workers { max-height: 56vh; overflow: auto; }
-  .card.safe { border-left-color: var(--safe); }
-  .card.caution { border-left-color: var(--caution); }
-  .card.bad { border-left-color: var(--bad); }
-  .card.flagged { box-shadow: 0 0 0 1px var(--bad) inset; }
-  .card-head { display: flex; align-items: center; gap: 8px; }
-  .who { font-weight: 600; font-size: 16px; }
-  .badge { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 4px; color: #0b0f14; background: var(--unknown); }
-  .badge.safe { background: var(--safe); }
-  .badge.caution { background: var(--caution); }
-  .badge.bad { background: var(--bad); color: #fff; }
-  .reba { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
-  .posture { margin: 6px 0 8px; font-size: 15px; }
-  .row { display: grid; grid-template-columns: 12px 80px 1fr auto; gap: 8px; align-items: center; padding: 3px 0; font-size: 14px; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--unknown); }
-  .dot.safe { background: var(--safe); }
-  .dot.caution { background: var(--caution); }
-  .dot.bad { background: var(--bad); }
-  .row .name, .row .time { color: var(--muted); }
-  .row .time { font-variant-numeric: tabular-nums; }
-  .row.flagged .time { color: var(--bad); font-weight: 700; }
-  .flags { max-height: 280px; overflow: auto; }
-  .flag { padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
-  .flag:last-child { border-bottom: 0; }
-  .flag time { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 8px; }
-  .flag .pod { color: var(--muted); }
-  footer { padding: 0 20px 18px; color: var(--muted); font-size: 13px; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.4 var(--sans); }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .num, .tnum { font-variant-numeric: tabular-nums; }
+
+  .app { height: 100%; display: grid; grid-template-rows: auto auto minmax(0, 1fr); }
+
+  /* ---- top bar ---- */
+  .top {
+    display: flex; align-items: center; gap: 14px; flex-wrap: nowrap;
+    padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 9px; margin-right: 4px; }
+  .brand svg { width: 26px; height: 26px; flex: none; }
+  .brand b { font: 700 16px/1 var(--display); letter-spacing: -0.01em; }
+  .brand span { color: var(--ink-3); font-size: 13px; }
+  .status {
+    display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 11px;
+    border-radius: 14px; background: var(--panel-2); border: 1px solid var(--line);
+    font-weight: 600; font-size: 13px; white-space: nowrap;
+  }
+  .status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--unknown); }
+  .status.st-running .dot { background: var(--safe); animation: beat 1.6s ease-in-out infinite; }
+  .status.st-loading .dot, .status.st-connecting .dot { background: var(--caution); }
+  .status.st-error .dot, .status.st-ended .dot { background: var(--bad); }
+  @keyframes beat { 50% { opacity: 0.35; } }
+  .meta { flex: 1 1 auto; color: var(--ink-3); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .top > .source, .top > .toggle, .top > .settings, .top > .brand, .top > .status { flex: none; }
+
+  .source { display: flex; align-items: center; gap: 6px; }
+  .field {
+    height: 32px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2);
+    padding: 0 9px; min-width: 0;
+  }
+  select.field { padding-right: 4px; }
+  #file { width: 200px; }
+  #url { width: 240px; }
+  #webcam { width: 64px; }
+  #view { width: 150px; flex: none; }
+  .btn {
+    height: 32px; padding: 0 14px; border-radius: 6px; border: 1px solid var(--line);
+    background: var(--panel); font-weight: 600; cursor: pointer;
+  }
+  .btn:hover { background: var(--panel-2); }
+  .btn.primary { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+  .btn.primary:hover { opacity: 0.88; }
+  .btn:disabled { opacity: 0.5; cursor: default; }
+
+  .toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; font-size: 13px; color: var(--ink-2); }
+  .toggle input { appearance: none; width: 32px; height: 18px; border-radius: 9px; background: var(--unknown); position: relative; margin: 0; cursor: pointer; transition: background .15s; }
+  .toggle input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--panel); transition: transform .15s; }
+  .toggle input:checked { background: var(--accent); }
+  .toggle input:checked::after { transform: translateX(14px); }
+
+  .settings { position: relative; }
+  .settings summary { list-style: none; }
+  .settings summary::-webkit-details-marker { display: none; }
+  .settings .menu {
+    position: absolute; right: 0; top: 38px; z-index: 20; width: 270px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14); padding: 12px; display: grid; gap: 12px;
+  }
+  .menu label.row-set { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
+  .menu input[type=number] { width: 72px; text-align: right; }
+  .menu .note { font-size: 12px; color: var(--ink-3); line-height: 1.45; border-top: 1px solid var(--line); padding-top: 10px; }
+
+  .banner { padding: 8px 16px; background: var(--bad-bg); color: var(--ink); border-bottom: 1px solid var(--line); font-size: 13px; }
+
+  /* ---- main grid ---- */
+  .grid {
+    min-height: 0; padding: 12px; gap: 12px; display: grid;
+    grid-template-columns: minmax(0, 1fr) 400px;
+    grid-template-rows: auto auto minmax(0, 1fr) 190px;
+    grid-template-areas:
+      "video summary"
+      "video detail"
+      "video workers"
+      "alerts workers";
+  }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+  .panel-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+  .panel-head h2 { margin: 0; font: 600 12px/1 var(--sans); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); }
+  .panel-head .aside { margin-left: auto; font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tag { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; background: var(--panel-2); color: var(--ink-2); border: 1px solid var(--line); }
+
+  .video-panel { grid-area: video; }
+  .video { flex: 1; min-height: 0; background: var(--video-bg); border-radius: 0 0 8px 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .video img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
+
+  /* summary */
+  .summary { grid-area: summary; display: grid; grid-template-columns: repeat(5, 1fr); }
+  .stat { padding: 10px 12px; display: grid; gap: 2px; border-left: 1px solid var(--line); }
+  .stat:first-child { border-left: 0; }
+  .stat .n { font: 700 24px/1.1 var(--display); font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: 12px; color: var(--ink-3); display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .stat .l i { width: 8px; height: 8px; border-radius: 2px; background: var(--unknown); }
+  .stat.bad .n { color: var(--bad); } .stat.bad .l i { background: var(--bad); }
+  .stat.caution .n { color: var(--caution); } .stat.caution .l i { background: var(--caution); }
+  .stat.safe .n { color: var(--safe); } .stat.safe .l i { background: var(--safe); }
+  .stat.zero .n { color: var(--ink-3); }
+
+  /* selected worker */
+  .detail { grid-area: detail; }
+  .detail-body { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 12px; padding: 10px 12px 12px; align-items: start; }
+  .bodymap { width: 92px; height: 150px; }
+  .bodymap .part { fill: var(--unknown-bg); stroke: var(--unknown); stroke-width: 1.2; }
+  .bodymap .head { fill: var(--panel-2); stroke: var(--ink-3); stroke-width: 1.2; }
+  .bodymap .part.lvl-safe { fill: var(--safe-bg); stroke: var(--safe); }
+  .bodymap .part.lvl-caution { fill: var(--caution-bg); stroke: var(--caution); }
+  .bodymap .part.lvl-bad { fill: var(--bad); stroke: var(--bad); }
+  .who-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .who-line b { font: 700 18px/1.2 var(--display); }
+  .posture-line { margin: 3px 0 8px; font-size: 14px; }
+  .posture-line .held { font-family: var(--mono); font-size: 13px; color: var(--ink-2); margin-left: 6px; }
+  .regions { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+  .regions li { display: grid; grid-template-columns: 10px 70px minmax(0, 1fr) 44px; gap: 8px; align-items: center; font-size: 13px; min-height: 22px; }
+  .regions .sw { width: 10px; height: 10px; border-radius: 3px; background: var(--unknown); }
+  .regions .name { color: var(--ink-3); }
+  .regions .label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .regions .time { font-family: var(--mono); font-size: 12px; text-align: right; color: var(--ink-2); }
+  .regions li.flagged .time { color: var(--bad); font-weight: 700; }
+  .detail-foot { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--ink-2); background: var(--panel-2); border-radius: 0 0 8px 8px; }
+  .detail-foot .score { font-weight: 700; color: var(--ink); }
+  .empty { padding: 14px 12px; color: var(--ink-3); font-size: 13px; }
+
+  /* level chips and swatches */
+  .chip { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; background: var(--unknown-bg); color: var(--ink-2); white-space: nowrap; }
+  .chip.lvl-safe { background: var(--safe-bg); color: var(--safe); }
+  .chip.lvl-caution { background: var(--caution-bg); color: var(--caution); }
+  .chip.lvl-bad { background: var(--bad); color: #fff; }
+  .sw.lvl-safe, .cell.lvl-safe { background: var(--safe); }
+  .sw.lvl-caution, .cell.lvl-caution { background: var(--caution); }
+  .sw.lvl-bad, .cell.lvl-bad { background: var(--bad); }
+
+  /* worker list */
+  .workers-panel { grid-area: workers; }
+  .list-head, .wrow { display: grid; grid-template-columns: 36px minmax(0, 1fr) 92px 34px; gap: 10px; align-items: center; padding: 0 12px; }
+  .idb { height: 22px; border-radius: 4px; background: var(--unknown-bg); color: var(--ink-2); font: 700 13px/22px var(--mono); text-align: center; font-variant-numeric: tabular-nums; }
+  .idb.lvl-safe { background: var(--safe-bg); color: var(--safe); }
+  .idb.lvl-caution { background: var(--caution-bg); color: var(--caution); }
+  .idb.lvl-bad { background: var(--bad); color: #fff; }
+  .list-head { height: 28px; font-size: 11px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--line); }
+  .list-head .r, .wrow .reba { text-align: right; }
+  .wlist { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; min-height: 0; }
+  .wrow { min-height: 38px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .wrow:hover { background: var(--panel-2); }
+  .wrow.sel { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--accent); }
+  .wrow .what { min-width: 0; display: flex; gap: 6px; align-items: baseline; }
+  .wrow .p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wrow .h { font-family: var(--mono); font-size: 12px; color: var(--ink-3); flex: none; }
+  .wrow .tl { font-family: var(--mono); font-size: 11px; color: var(--ink-3); flex: none; margin-left: auto; }
+  .wrow.flagged .h { color: var(--bad); font-weight: 700; }
+  .cells { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
+  .cell { height: 20px; border-radius: 3px; background: var(--unknown-bg); color: #fff; font: 700 10px/20px var(--mono); text-align: center; }
+  .cell:not([class*="lvl-"]) { color: var(--ink-3); }
+  .wrow .reba { font-family: var(--mono); font-size: 13px; color: var(--ink-2); }
+
+  /* alerts */
+  .alerts-panel { grid-area: alerts; }
+  .alist { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; min-height: 0; }
+  .arow { display: grid; grid-template-columns: 70px 40px 92px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 0 12px; min-height: 32px; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .arow time { font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+  .arow .w { font-family: var(--mono); font-weight: 700; }
+  .arow .m { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pulses { display: inline-flex; gap: 3px; align-items: center; }
+  .pulses i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-2); }
+
+  @media (max-width: 1280px) {
+    .brand span { display: none; }
+  }
+  @media (max-width: 1100px) {
+    .top { flex-wrap: wrap; }
+    .grid { grid-template-columns: minmax(0, 1fr) 340px; }
+    .list-head, .wrow { grid-template-columns: 34px minmax(0, 1fr) 78px 28px; }
+    #file { width: 170px; }
+  }
+  @media (max-width: 860px) {
+    .app { height: auto; }
+    .grid {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto;
+      grid-template-areas: "summary" "video" "detail" "workers" "alerts";
+    }
+    .video { aspect-ratio: 16 / 9; }
+    .workers-panel .wlist { max-height: 420px; }
+    .alerts-panel .alist { max-height: 260px; }
+    .summary { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .stat .n { font-size: 20px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .status.st-running .dot { animation: none; }
+    .toggle input, .toggle input::after { transition: none; }
+  }
 </style>
 </head>
 <body>
-<header>
-  <h1>ErgoTwin <span>camera module</span></h1>
-  <span id="status" class="chip idle">Idle</span>
-  <span class="spacer"></span>
-  <span id="meta" class="meta"></span>
-</header>
+<div class="app">
 
-<div class="controls">
-  <select id="kind" aria-label="Source type">
-    <option value="file">Video file</option>
-    <option value="webcam">Webcam</option>
-    <option value="url">Stream URL</option>
-  </select>
-  <select id="file" aria-label="Video file"></select>
-  <input id="webcam" type="number" min="0" value="0" aria-label="Webcam number" hidden>
-  <input id="url" type="text" placeholder="udp://127.0.0.1:5000 or rtsp://camera/stream" aria-label="Stream URL" hidden>
-  <button id="start" class="primary">Start</button>
-  <button id="stop">Stop</button>
-  <label class="toggle"><input id="privacy" type="checkbox"> Skeleton only</label>
-  <label class="toggle"><input id="seated" type="checkbox"> Seated work</label>
-  <label class="toggle">Flag bad after <input id="badHold" type="number" min="1" max="600" step="1"> s,</label>
-  <label class="toggle">caution after <input id="cautionHold" type="number" min="1" max="3600" step="1"> s</label>
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 26 26" aria-hidden="true">
+        <rect width="26" height="26" rx="6" fill="currentColor" opacity="0.08"></rect>
+        <circle cx="13" cy="5.6" r="2.4" fill="#f2b705"></circle>
+        <path d="M13 8.5 L12 15.5 M12 15.5 L8.5 22 M12 15.5 L16.5 21.5 M12.6 10.5 L18 8.5 M12.6 10.5 L8 13.5"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"></path>
+      </svg>
+      <b>ErgoTwin</b><span>Posture camera</span>
+    </div>
+    <div id="status" class="status st-idle"><span class="dot"></span><span id="statusText">Idle</span></div>
+    <div id="meta" class="meta"></div>
+
+    <form id="sourceForm" class="source" autocomplete="off">
+      <select id="kind" class="field" aria-label="Source type">
+        <option value="file">Video file</option>
+        <option value="webcam">Webcam</option>
+        <option value="url">Stream URL</option>
+      </select>
+      <select id="file" class="field" aria-label="Video file"></select>
+      <input id="webcam" class="field" type="number" min="0" value="0" aria-label="Webcam number" hidden>
+      <input id="url" class="field" type="text" placeholder="udp://127.0.0.1:5000" aria-label="Stream URL" hidden>
+      <button id="start" class="btn primary" type="submit">Start</button>
+      <button id="stop" class="btn" type="button">Stop</button>
+    </form>
+
+    <select id="view" class="field" aria-label="Part of the picture to analyse"
+            title="For a recording that shows several camera views in a grid: analyse one view enlarged, or every view at once"></select>
+
+    <label class="toggle"><input id="privacy" type="checkbox"> Skeleton only</label>
+
+    <details id="settings" class="settings">
+      <summary class="btn" role="button">Settings</summary>
+      <div class="menu">
+        <label class="toggle"><input id="seated" type="checkbox"> Seated work (bent knees are fine)</label>
+        <label class="row-set">Flag a bad posture after
+          <span><input id="badHold" class="field" type="number" min="1" max="600" step="1"> s</span></label>
+        <label class="row-set">Flag a caution posture after
+          <span><input id="cautionHold" class="field" type="number" min="1" max="3600" step="1"> s</span></label>
+        <div class="note">Changes apply at once and last until the app stops. Angles come from one 2D camera
+          and are most accurate from the side. Wrists are not measured.</div>
+      </div>
+    </details>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <main class="grid">
+    <section class="panel video-panel" aria-label="Live view">
+      <div class="panel-head">
+        <h2>Live view</h2>
+        <span id="privacyTag" class="tag" hidden>Skeleton only · no camera image</span>
+        <span id="videoAside" class="aside"></span>
+      </div>
+      <div class="video"><img id="video" src="/video" alt="Live video with each worker's skeleton coloured by posture"></div>
+    </section>
+
+    <section class="panel summary" aria-label="Summary">
+      <div class="stat" id="sAll"><span class="n">0</span><span class="l">In view</span></div>
+      <div class="stat bad" id="sBad"><span class="n">0</span><span class="l"><i></i>Bad</span></div>
+      <div class="stat caution" id="sCaution"><span class="n">0</span><span class="l"><i></i>Caution</span></div>
+      <div class="stat safe" id="sSafe"><span class="n">0</span><span class="l"><i></i>Safe</span></div>
+      <div class="stat" id="sFlag"><span class="n">0</span><span class="l">Flagged now</span></div>
+    </section>
+
+    <section class="panel detail" aria-label="Selected worker">
+      <div class="panel-head"><h2 id="detailTitle">Most at risk</h2><span id="detailAside" class="aside">Click a worker to keep them here</span></div>
+      <div id="detailEmpty" class="empty">No workers in view.</div>
+      <div id="detailBody" class="detail-body" hidden>
+        <svg class="bodymap" viewBox="0 0 92 150" aria-hidden="true">
+          <circle class="head" cx="46" cy="12" r="10"></circle>
+          <rect class="part" data-region="neck" x="41" y="23" width="10" height="9" rx="3"></rect>
+          <rect class="part" data-region="back" x="30" y="33" width="32" height="46" rx="8"></rect>
+          <rect class="part" data-region="shoulders" x="17" y="35" width="10" height="31" rx="5"></rect>
+          <rect class="part" data-region="shoulders" x="15" y="68" width="9" height="27" rx="4.5"></rect>
+          <rect class="part" data-region="shoulders" x="65" y="35" width="10" height="31" rx="5"></rect>
+          <rect class="part" data-region="shoulders" x="68" y="68" width="9" height="27" rx="4.5"></rect>
+          <rect class="part" data-region="knees" x="32" y="82" width="12" height="32" rx="6"></rect>
+          <rect class="part" data-region="knees" x="48" y="82" width="12" height="32" rx="6"></rect>
+          <rect class="part" data-region="knees" x="33" y="116" width="10" height="31" rx="5"></rect>
+          <rect class="part" data-region="knees" x="49" y="116" width="10" height="31" rx="5"></rect>
+        </svg>
+        <div>
+          <div class="who-line"><b id="dWho">Worker</b><span id="dChip" class="chip">–</span></div>
+          <div class="posture-line"><span id="dPosture">–</span><span id="dHeld" class="held"></span></div>
+          <ul id="dRegions" class="regions"></ul>
+        </div>
+      </div>
+      <div id="detailFoot" class="detail-foot" hidden></div>
+    </section>
+
+    <section class="panel workers-panel" aria-label="Workers">
+      <div class="panel-head"><h2>Workers</h2><span class="aside">Most at risk first</span></div>
+      <div class="list-head"><span>#</span><span>Worst posture · held</span><span>B N S K</span><span class="r">REBA</span></div>
+      <ul id="workers" class="wlist"></ul>
+    </section>
+
+    <section class="panel alerts-panel" aria-label="Alerts">
+      <div class="panel-head"><h2>Alerts</h2><span id="alertAside" class="aside">Newest first · pod pulses on the right</span></div>
+      <ol id="alerts" class="alist"></ol>
+    </section>
+  </main>
 </div>
-
-<main>
-  <div class="video"><img id="video" src="/video" alt="Live video with worker skeletons"></div>
-  <div class="side">
-    <section>
-      <h2 id="workersTitle">Workers</h2>
-      <div id="workers" class="workers"><div class="empty">No workers in view.</div></div>
-    </section>
-    <section>
-      <h2>Flags</h2>
-      <div id="flags" class="flags"><div class="empty">No flags yet.</div></div>
-    </section>
-  </div>
-</main>
-
-<footer>
-  Angles are estimated from one 2D camera and are most accurate when the worker is seen from the side.
-  Wrists are not measured by this pose model. Colours follow the REBA score of each body part.
-  The whole-body REBA score also counts load and grip, which are set per station in config.toml.
-</footer>
 
 <script>
 const $ = (id) => document.getElementById(id);
-const REGION_NAMES = { back: "Back", neck: "Neck", shoulders: "Shoulders", knees: "Knees" };
-const STATUS_NAMES = { idle: "Idle", loading: "Loading model", connecting: "Connecting", running: "Live", ended: "Stream ended", error: "Error" };
+const REGIONS = [["back", "Back", "B"], ["neck", "Neck", "N"], ["shoulders", "Shoulders", "S"], ["knees", "Knees", "K"]];
+const RANK = { bad: 2, caution: 1, safe: 0 };
+const LEVEL_NAME = { bad: "Bad", caution: "Caution", safe: "Safe" };
+const STATUS_NAME = { idle: "Idle", loading: "Loading model", connecting: "Connecting", running: "Live", ended: "Stream ended", error: "Error" };
 
-let flagsShown = "";
-let togglesSynced = false;
+let pinnedId = null;     // a worker the user clicked; stays selected while in view
+let pinnedLast = null;   // their latest data, shown through short detection gaps
+let pinnedSeenAt = 0;
+const PIN_GRACE_MS = 4000;
+let settingsSynced = false;
+let alertsKey = "";
 
 function clock(seconds) {
-  const s = Math.floor(seconds);
+  const s = Math.max(0, Math.floor(seconds));
   return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
 }
-
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
 }
+function lvl(level) { return level ? "lvl-" + level : ""; }
 
 async function post(url, body) {
   const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body || {}),
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}),
   });
   if (!response.ok) {
     const problem = await response.json().catch(() => ({}));
@@ -148,26 +383,25 @@ async function post(url, body) {
   return response.json();
 }
 
+/* ---------- source controls ---------- */
 function showSourceInput() {
   const kind = $("kind").value;
   $("file").hidden = kind !== "file";
   $("webcam").hidden = kind !== "webcam";
   $("url").hidden = kind !== "url";
 }
-
 function chosenSource() {
   const kind = $("kind").value;
   if (kind === "file") return $("file").value;
   if (kind === "webcam") return String($("webcam").value);
   return $("url").value.trim();
 }
-
 async function loadVideos() {
   const files = await (await fetch("/videos")).json();
   const select = $("file");
   select.replaceChildren();
   if (!files.length) {
-    const none = el("option", "", "No clips in the videos folder");
+    const none = el("option", "", "No clips in videos/");
     none.value = "";
     select.append(none);
     return;
@@ -179,126 +413,294 @@ async function loadVideos() {
   }
 }
 
-const CROWD = 5;  // with more workers than this, the safe ones get one line each
-const LEVEL_RANK = { bad: 2, caution: 1, safe: 0 };
-
-function workerCard(w, compact) {
-  const level = w.level || "unknown";
-  const card = el("div", "card " + level + (w.flagged ? " flagged" : "") + (compact ? " compact" : ""));
-
-  const head = el("div", "card-head");
-  head.append(
-    el("span", "who", "Worker " + w.id),
-    el("span", "badge " + level, (w.level || "not visible").toUpperCase()),
-  );
-  card.append(head);
-  if (compact) return card;
-
-  const alert = w.level === "caution" || w.level === "bad";
-  card.append(el("div", "posture", w.posture + (alert ? " for " + clock(w.held_s) : "")));
-
-  for (const [key, name] of Object.entries(REGION_NAMES)) {
-    const r = w.regions[key];
-    if (!r) continue;
-    const row = el("div", "row" + (r.flagged ? " flagged" : ""));
-    row.append(
-      el("span", "dot " + (r.level || "unknown")),
-      el("span", "name", name),
-      el("span", "label", r.label),
-      el("span", "time", r.level ? clock(r.held_s) + (r.flagged ? " FLAG" : "") : "–"),
-    );
-    card.append(row);
+/* ---------- view: the whole picture, one tile of a grid recording, or every tile ---------- */
+function viewName(spec) {
+  const match = /^(\d+)x(\d+):(\d+|all)$/.exec(spec || "");
+  if (!match) return "whole picture";
+  const grid = match[1] + "×" + match[2];
+  return match[3] === "all" ? "every tile of " + grid : "tile " + match[3] + " of " + grid;
+}
+function buildViews() {
+  const select = $("view");
+  const whole = el("option", "", "Whole picture");
+  whole.value = "whole";
+  select.append(whole);
+  for (const [cols, rows] of [[3, 3], [2, 2]]) {
+    const group = document.createElement("optgroup");
+    group.label = cols + " × " + rows + " grid";
+    const all = el("option", "", cols + "×" + rows + " · all tiles");
+    all.value = cols + "x" + rows + ":all";
+    group.append(all);
+    for (let i = 1; i <= cols * rows; i++) {
+      const option = el("option", "", cols + "×" + rows + " · tile " + i);
+      option.value = cols + "x" + rows + ":" + i;
+      group.append(option);
+    }
+    select.append(group);
   }
-  // The badge above is the worst body region; this line is the score for the whole body.
-  card.append(el("div", "reba", "Whole-body REBA " + w.reba.score + " · " + w.reba.risk + " risk"
-    + (w.reba.complete ? "" : " (partial view)")));
-  return card;
+}
+function setView(spec) {
+  const select = $("view");
+  if (![...select.options].some((o) => o.value === spec)) {  // set in config.toml to another grid
+    const option = el("option", "", viewName(spec));
+    option.value = spec;
+    select.append(option);
+  }
+  select.value = spec;
 }
 
-function flagItem(f) {
-  const item = el("div", "flag");
-  item.append(
-    el("time", "", f.clock),
-    document.createTextNode(f.message + " "),
-    el("span", "pod", "· pod: " + f.pulses + (f.pulses === 1 ? " pulse" : " pulses")),
-  );
-  return item;
+/* ---------- rendering ---------- */
+function sortWorkers(list) {
+  return [...list].sort((a, b) =>
+    (RANK[b.level] ?? -1) - (RANK[a.level] ?? -1) || b.held_s - a.held_s || a.id - b.id);
 }
 
-function render(state) {
-  const chip = $("status");
-  chip.className = "chip " + state.status;
-  const name = STATUS_NAMES[state.status] || state.status;
-  chip.textContent = state.status === "running" || !state.message ? name : name + ": " + state.message;
+function setStat(id, value) {
+  const node = $(id);
+  node.querySelector(".n").textContent = value;
+  node.classList.toggle("zero", value === 0);
+}
 
-  // The app works out how far the camera looks down from the people it sees.
-  const tilt = state.camera && state.camera.learned && state.camera.tilt_deg >= 10
-    ? " · camera looks down about " + state.camera.tilt_deg + "°" : "";
-  $("meta").textContent = state.status === "running"
-    ? state.source + " · " + Math.round(state.fps) + " fps · " + state.device + tilt
-    : "";
+function renderTop(state) {
+  const status = $("status");
+  status.className = "status st-" + state.status;
+  $("statusText").textContent = STATUS_NAME[state.status] || state.status;
 
-  if (!togglesSynced) {
+  const parts = [];
+  if (state.status === "running") {
+    parts.push(Math.round(state.fps) + " fps", state.device.replace(/^NVIDIA GeForce /, ""));
+    if (state.camera && state.camera.learned && state.camera.tilt_deg >= 10) parts.push("camera tilt " + state.camera.tilt_deg + "°");
+  } else if (state.message && state.status !== "error" && state.status !== "ended") {
+    parts.push(state.message);
+  }
+  $("meta").textContent = parts.join(" · ");
+
+  const problem = state.status === "error" || state.status === "ended";
+  $("banner").hidden = !problem;
+  if (problem) $("banner").textContent = (state.status === "error" ? "Could not run: " : "") + state.message;
+
+  $("privacyTag").hidden = !state.privacy;
+  const where = state.tile && state.tile !== "whole" ? " · " + viewName(state.tile) : "";
+  $("videoAside").textContent = state.source ? state.source.replace("videos/", "") + where : "";
+
+  if (!settingsSynced) {
+    setView(state.tile || "whole");
     $("privacy").checked = state.privacy;
     $("seated").checked = state.seated;
     $("badHold").value = state.bad_hold_s;
     $("cautionHold").value = state.caution_hold_s;
-    togglesSynced = true;
+    settingsSynced = true;
   }
+}
 
-  // Workers who need attention come first. In a crowd, safe workers take one line each.
-  const list = [...state.workers].sort((a, b) =>
-    (LEVEL_RANK[b.level] ?? -1) - (LEVEL_RANK[a.level] ?? -1) || a.id - b.id);
+function renderSummary(list) {
   const count = (level) => list.filter((w) => w.level === level).length;
-  $("workersTitle").textContent = list.length
-    ? "Workers: " + list.length + " in view, " + count("bad") + " bad, " + count("caution") + " caution"
-    : "Workers";
-  const crowded = list.length > CROWD;
-  const workers = $("workers");
-  if (list.length) workers.replaceChildren(...list.map((w) => workerCard(w, crowded && w.level === "safe")));
-  else workers.replaceChildren(el("div", "empty", "No workers in view."));
+  setStat("sAll", list.length);
+  setStat("sBad", count("bad"));
+  setStat("sCaution", count("caution"));
+  setStat("sSafe", count("safe"));
+  setStat("sFlag", list.filter((w) => w.flagged).length);
+}
 
-  // Redraw the flag list only when it changes, so scrolling it is not interrupted.
-  const key = state.flags.map((f) => f.t + ":" + f.worker + ":" + f.region).join("|");
-  if (key !== flagsShown) {
-    flagsShown = key;
-    const flags = $("flags");
-    if (state.flags.length) flags.replaceChildren(...state.flags.map(flagItem));
-    else flags.replaceChildren(el("div", "empty", "No flags yet."));
+function renderDetail(worker, pinned, outOfView) {
+  $("detailTitle").textContent = pinned ? "Selected worker" : "Most at risk";
+  $("detailAside").textContent = outOfView ? "Out of view for a moment"
+    : pinned ? "Click again or press Esc to release" : "Click a worker to keep them here";
+  $("detailEmpty").hidden = !!worker;
+  $("detailBody").hidden = !worker;
+  $("detailFoot").hidden = !worker;
+  if (!worker) return;
+
+  $("dWho").textContent = "Worker " + worker.id + (worker.tile ? " · tile " + worker.tile : "");
+  const chip = $("dChip");
+  chip.className = "chip " + lvl(worker.level);
+  chip.textContent = LEVEL_NAME[worker.level] || "Not visible";
+  const alert = worker.level === "caution" || worker.level === "bad";
+  $("dPosture").textContent = worker.posture;
+  $("dHeld").textContent = alert ? "held " + clock(worker.held_s) : "";
+
+  for (const part of document.querySelectorAll(".bodymap .part")) {
+    const region = worker.regions[part.dataset.region];
+    part.setAttribute("class", "part " + lvl(region && region.level));
   }
+
+  const rows = REGIONS.map(([key, name]) => {
+    const r = worker.regions[key] || {};
+    const li = el("li", r.flagged ? "flagged" : "");
+    li.append(
+      el("span", "sw " + lvl(r.level)),
+      el("span", "name", name),
+      el("span", "label", r.label || "Not visible"),
+      el("span", "time", r.level ? clock(r.held_s) : "–"),
+    );
+    li.title = name + ": " + (r.label || "Not visible") + (r.flagged ? " (flagged)" : "");
+    return li;
+  });
+  $("dRegions").replaceChildren(...rows);
+
+  const foot = $("detailFoot");
+  const score = el("span", "score", "REBA " + worker.reba.score);
+  foot.replaceChildren(
+    score,
+    el("span", "", worker.reba.risk + " risk" + (worker.reba.complete ? "" : " · partial view")),
+    el("span", "", "seen from the " + worker.view),
+  );
+  if (worker.flagged) foot.append(el("span", "chip lvl-bad", "Flagged"));
+}
+
+function workerRow(w, selected) {
+  const li = el("li", "wrow" + (selected ? " sel" : "") + (w.flagged ? " flagged" : ""));
+  li.dataset.id = w.id;
+  const alert = w.level === "caution" || w.level === "bad";
+  const what = el("span", "what");
+  what.append(el("span", "p", w.posture));
+  if (alert) what.append(el("span", "h", clock(w.held_s)));
+  if (w.tile) what.append(el("span", "tl", "T" + w.tile));
+  const cells = el("span", "cells");
+  for (const [key, name, letter] of REGIONS) {
+    const r = w.regions[key] || {};
+    const cell = el("span", "cell " + lvl(r.level), letter);
+    cell.title = name + ": " + (r.label || "Not visible") + (r.level ? " · " + clock(r.held_s) : "");
+    cells.append(cell);
+  }
+  const badge = el("span", "idb " + lvl(w.level), String(w.id));
+  badge.title = "Worker " + w.id + (w.tile ? " in tile " + w.tile : "") + ": " + (LEVEL_NAME[w.level] || "not visible");
+  li.setAttribute("aria-label", "Worker " + w.id + ", " + (LEVEL_NAME[w.level] || "not visible") + ", " + w.posture);
+  li.append(
+    badge,
+    what,
+    cells,
+    el("span", "reba", String(w.reba.score)),
+  );
+  return li;
+}
+
+function renderWorkers(list, selectedId) {
+  const box = $("workers");
+  if (!list.length) {
+    box.replaceChildren(el("li", "empty", "No workers in view yet. Start a source above."));
+    return;
+  }
+  box.replaceChildren(...list.map((w) => workerRow(w, w.id === selectedId)));
+}
+
+function alertRow(f) {
+  const li = el("li", "arow");
+  const pulses = el("span", "pulses");
+  pulses.title = "Pod: " + f.pulses + (f.pulses === 1 ? " pulse" : " pulses");
+  for (let i = 0; i < f.pulses; i++) pulses.append(el("i"));
+  const region = (REGIONS.find(([key]) => key === f.region) || [f.region, f.region])[1];
+  li.append(
+    el("time", "", f.clock),
+    el("span", "w", "#" + f.worker),
+    el("span", "chip " + lvl(f.level), region),
+    el("span", "m", (f.tile ? "Tile " + f.tile + " · " : "") + f.message.replace(/^Worker \d+: /, "")),
+    pulses,
+  );
+  return li;
+}
+
+function renderAlerts(flags) {
+  const key = flags.map((f) => f.seq).join(",");
+  if (key === alertsKey) return;  // unchanged: leave the list (and its scroll position) alone
+  alertsKey = key;
+  const box = $("alerts");
+  if (!flags.length) box.replaceChildren(el("li", "empty", "No alerts yet. A bad posture held 5 s or a caution posture held 60 s raises one."));
+  else box.replaceChildren(...flags.map(alertRow));
+  $("alertAside").textContent = flags.length ? flags.length + " shown · newest first · pod pulses on the right" : "Newest first";
+}
+
+function render(state) {
+  renderTop(state);
+  const list = sortWorkers(state.workers);
+  renderSummary(list);
+  let selected = null;
+  let outOfView = false;
+  if (pinnedId !== null) {
+    const found = list.find((w) => w.id === pinnedId);
+    if (found) {
+      selected = pinnedLast = found;
+      pinnedSeenAt = Date.now();
+    } else if (pinnedLast && Date.now() - pinnedSeenAt < PIN_GRACE_MS) {
+      selected = pinnedLast;  // missed for a moment: keep showing them
+      outOfView = true;
+    } else {
+      pinnedId = pinnedLast = null;  // they left the picture
+    }
+  }
+  const shown = selected || list[0] || null;
+  renderDetail(shown, !!selected, outOfView);
+  renderWorkers(list, shown ? shown.id : null);
+  renderAlerts(state.flags);
 }
 
 async function poll() {
   try {
     render(await (await fetch("/state")).json());
   } catch {
-    $("status").className = "chip error";
-    $("status").textContent = "The app is not running";
+    $("status").className = "status st-error";
+    $("statusText").textContent = "App not running";
+    $("meta").textContent = "Start it with run.cmd, then reload this page";
   }
 }
 
+/* ---------- events ---------- */
 $("kind").addEventListener("change", showSourceInput);
-
-$("start").addEventListener("click", async () => {
-  const source = chosenSource();
+$("sourceForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
   $("start").disabled = true;
+  pinnedId = pinnedLast = null;
   try {
-    await post("/start", { source });
+    await post("/start", { source: chosenSource() });
   } catch (error) {
-    $("status").className = "chip error";
-    $("status").textContent = error.message;
+    $("banner").hidden = false;
+    $("banner").textContent = error.message;
   } finally {
     $("start").disabled = false;
   }
 });
-
 $("stop").addEventListener("click", () => post("/stop"));
+$("view").addEventListener("change", async (e) => {
+  pinnedId = pinnedLast = null;  // a new view has new workers
+  try {
+    await post("/settings", { tile: e.target.value });
+  } catch (error) {
+    $("banner").hidden = false;
+    $("banner").textContent = error.message;
+  }
+});
 $("privacy").addEventListener("change", (e) => post("/settings", { privacy: e.target.checked }));
 $("seated").addEventListener("change", (e) => post("/settings", { seated: e.target.checked }));
 $("badHold").addEventListener("change", (e) => post("/settings", { bad_hold_s: Number(e.target.value) }));
 $("cautionHold").addEventListener("change", (e) => post("/settings", { caution_hold_s: Number(e.target.value) }));
 
+// Rows are redrawn several times a second, so selection reacts to the press, not the full click.
+$("workers").addEventListener("pointerdown", (event) => {
+  const row = event.target.closest(".wrow");
+  if (!row) return;
+  const id = Number(row.dataset.id);
+  pinnedId = pinnedId === id ? null : id;
+  pinnedLast = null;
+  pinnedSeenAt = Date.now();
+  poll();
+});
+
+// Escape releases a selected worker (and closes the settings menu).
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  pinnedId = pinnedLast = null;
+  $("settings").open = false;
+  poll();
+});
+
+// Close the settings menu when clicking elsewhere.
+document.addEventListener("pointerdown", (event) => {
+  const menu = $("settings");
+  if (menu.open && !menu.contains(event.target)) menu.open = false;
+});
+
 showSourceInput();
+buildViews();
 loadVideos();
 poll();
 setInterval(poll, 300);

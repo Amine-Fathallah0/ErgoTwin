@@ -139,6 +139,37 @@ def test_bend_toward_camera_is_invisible_without_a_reference():
     assert m(front_figure(bend_toward_camera=60)).trunk_flexion == pytest.approx(0, abs=TOL)
 
 
+def _move(person, moves):
+    for name, (dx, dy) in moves.items():
+        person.xy[INDEX[name]] += (dx, dy)
+    return person
+
+
+def test_front_view_neutral_head_has_no_side_tilt():
+    assert m(front_figure()).neck_side_bend == pytest.approx(0, abs=TOL)
+
+
+def test_front_view_head_tilt_is_read_from_the_ear_line():
+    # Tilt the head 20 degrees: in the picture the worker's left ear (image-right) drops.
+    half_gap = 8.0
+    drop = half_gap * np.tan(np.radians(20))
+    person = _move(front_figure(), {"l_ear": (0.0, drop), "r_ear": (0.0, -drop)})
+    assert m(person).neck_side_bend == pytest.approx(20, abs=TOL)
+
+
+def test_front_view_bowed_head_is_not_read_as_a_side_tilt():
+    # Head bowed over the work: both ears come down toward the shoulders, one a little more.
+    person = _move(front_figure(), {"l_ear": (0.0, 12.0), "r_ear": (0.0, 15.0), "nose": (0.0, 14.0)})
+    assert m(person).neck_side_bend == pytest.approx(0, abs=12)
+    assert m(person).neck_side_bend < 15  # under the sideways threshold: no false caution
+
+
+def test_front_view_head_bowed_toward_the_camera_is_not_measured():
+    person = _move(front_figure(scale=2.0), {"l_ear": (0.0, 60.0), "r_ear": (0.0, 60.0), "nose": (0.0, 60.0)})
+    a = m(person)
+    assert a.neck_side_bend is None and a.neck_flexion is None
+
+
 def test_seen_at_an_angle_a_backward_head_lean_is_not_reported():
     person = front_figure()
     for name, dx in (("l_shoulder", -15.0), ("r_shoulder", 15.0),  # narrower shoulders: body half turned

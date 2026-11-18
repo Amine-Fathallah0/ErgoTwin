@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from .config import Config
 from .engine import Engine
 from .sources import VIDEO_SUFFIXES
+from .tiles import WHOLE, parse_tile
 
 STATIC = Path(__file__).parent / "static"
 
@@ -30,6 +31,7 @@ class SettingsRequest(BaseModel):
     seated: bool | None = None
     bad_hold_s: float | None = None  # flag a bad posture held this long
     caution_hold_s: float | None = None  # flag a caution posture held this long
+    tile: str | None = None  # "whole", one view of a grid recording such as "3x3:5", or every view: "3x3:all"
 
 
 def _placeholder(text: str) -> bytes:
@@ -107,7 +109,13 @@ def create_app(cfg: Config, root: Path, autostart: str | None = None) -> FastAPI
             cfg.timing.bad_hold_s = min(600.0, max(1.0, request.bad_hold_s))
         if request.caution_hold_s is not None:
             cfg.timing.caution_hold_s = min(3600.0, max(1.0, request.caution_hold_s))
-        return {"privacy": engine.privacy, "seated": cfg.station.seated,
+        if request.tile is not None:
+            try:
+                parse_tile(request.tile)
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from None
+            cfg.camera.tile = request.tile.strip().lower().replace("×", "x") or WHOLE
+        return {"privacy": engine.privacy, "seated": cfg.station.seated, "tile": cfg.camera.tile,
                 "bad_hold_s": cfg.timing.bad_hold_s, "caution_hold_s": cfg.timing.caution_hold_s}
 
     @app.get("/video")

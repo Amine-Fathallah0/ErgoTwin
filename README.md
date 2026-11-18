@@ -9,8 +9,8 @@ result live, and the dashboard and the ankle pod can read the same data as JSON.
 
 ![The app's page in skeleton-only mode, on a ceiling camera over a produce-sorting line](docs/page.jpg)
 
-*The page in skeleton-only mode: no camera picture is shown, only skeletons. Each worker's card shows the
-posture of every body region and how long it has lasted. The flags list is at the bottom right.*
+*The page in skeleton-only mode: no camera picture is shown, only skeletons. On the right: the summary, the
+worker most at risk on a body map, and every worker sorted by risk. Alerts are under the video.*
 
 ## Where to start
 
@@ -140,7 +140,8 @@ The `videos/` folder is empty after cloning, because clips are not stored in the
 
 - Put any clip you have into `videos/`, or
 - Make the synthetic test clip: `.venv\Scripts\python scripts\make_test_clip.py`, or
-- Ask the team's computer-vision lead for the warehouse clip used in development.
+- Ask the team's computer-vision lead for the clips used in development: a warehouse ceiling camera and a
+  3 × 3 grid recording of an assembly line.
 
 ### 2.4 Run
 
@@ -168,33 +169,22 @@ Stop the app with **Ctrl+C** in the terminal.
 
 ## 3. Using the page
 
-| Part of the page | What it is |
+Everything fits on one screen, with no scrolling on a laptop. The page follows the computer's light or dark
+setting.
+
+| Part of the page | What it shows |
 |---|---|
-| Status, top left | **Idle**, **Loading model**, **Connecting**, **Live**, **Stream ended** or **Error** (with the reason). |
-| Top right | What is playing, frames per second, the GPU, and for a ceiling camera how far it looks down. |
-| Source type | **Video file**, **Webcam** or **Stream URL**. The box next to it changes to match. |
-| **Start** / **Stop** | Start the chosen source, or stop. Starting another source stops the current one. |
-| **Skeleton only** | Hide the camera picture and keep the skeletons. |
-| **Seated work** | For seated stations: bent knees no longer count against the worker. |
-| **Flag bad after … s, caution after … s** | How long a posture must be held before a flag. Changes apply at once. |
-| Video | Each worker's skeleton, coloured by body region, and a label with their number. |
-| Workers | One card per worker. Workers who need attention are listed first. |
-| Flags | Every flag raised, newest first, with the pod's vibration code. |
+| **Top bar** | The status (**Idle**, **Loading model**, **Connecting**, **Live**, **Stream ended** or **Error**), the frame rate, the GPU and, for a ceiling camera, how far it looks down. Then the source picker (**Video file**, **Webcam** or **Stream URL**) with **Start** and **Stop**, the **View** picker for grid recordings ([4.6](#46-recordings-with-several-views-in-a-grid)), the **Skeleton only** switch, and **Settings**. |
+| **Live view** | The video, with each worker's skeleton coloured by body region and a label with their number. In a crowd, workers who are fine carry only their number. |
+| **Summary** | How many workers are in view, how many are bad, caution and safe, and how many are flagged right now. |
+| **Most at risk** | The worker who most needs attention: a body map coloured by region, each region's posture and how long it has lasted, and the whole-body REBA score (1 to 15). Click a worker in the list to keep them here; click again or press **Esc** to let go. |
+| **Workers** | One line per worker, most at risk first: their number (coloured by their worst region), that posture and how long it has lasted, one square each for **B**ack, **N**eck, **S**houlders and **K**nees, and the REBA score. Hover a square for its posture and time. |
+| **Alerts** | Every alert, newest first: the time, the worker, the body region, what happened, and the pod's vibration pulses as dots. |
+| **Settings** | **Seated work** (bent knees no longer count against the worker), and how long a bad or a caution posture must last before an alert. Changes apply at once. |
 
 **Colours**: green = safe, amber = caution, red = bad, grey = that body part is not visible. A red frame
-around a worker in the video means a flag is active.
-
-**A worker card** shows:
-
-- The **badge**: the worst of the worker's body regions.
-- The **posture** that sets the badge and how long it has been held, for example *Arm raised 61° for 0:04*.
-- One line per region: back, neck, shoulders and knees, each with its posture and how long it has lasted.
-  **FLAG** appears when that region has passed its flag time.
-- The **whole-body REBA score** (1 to 15) and its risk band. "Partial view" means a region was hidden and
-  counted as neutral.
-
-With more than five workers in view, safe workers shrink to one line, and their labels in the video show
-only their number.
+around a worker in the video means an alert is active for them. "Partial view" next to a REBA score means
+a region was hidden and counted as neutral.
 
 ---
 
@@ -248,6 +238,39 @@ To open a clip straight away: `.\run.cmd --source videos\demo.mp4`
 In PowerShell, commands in the current folder need the `.\` in front (`.\run.cmd`). In Command Prompt it
 works with or without it.
 
+### 4.6 Recordings with several views in a grid
+
+Some recordings show several camera views at once, for example a 3 × 3 grid. In the whole picture every
+worker is tiny: on the 3 × 3 test clip the model found only 2 to 4 people per frame, mostly people walking past.
+
+The **View** picker has two ways round this. Tiles are counted left to right, then top to bottom.
+
+| Choice | What it does | On the 3 × 3 test clip |
+|---|---|---|
+| *3×3 · all tiles* | Cuts out all nine views, enlarges each one, and analyses them together. Everyone is drawn back on the whole grid. | 60 to 90 workers at about 4.5 fps |
+| *3×3 · tile 5* (or any tile) | Cuts out that one view and enlarges it to the full picture. | about 8 workers at 20 fps |
+
+With all tiles, each view is treated as a camera of its own: its own tracks, its own camera-tilt
+correction, its own clocks. Worker numbers are shared, so no two workers on screen have the same number,
+and the worker list and the alerts say which tile each worker is in (**T5**, *Tile 5 ·*).
+
+All tiles uses a smaller, faster model than one tile (`yolo26s-pose.pt` instead of `yolo26m-pose.pt`),
+because the model has nine pictures to look at in every frame. It is loaded the first time you choose all
+tiles, which takes a few seconds. Both models together use about 1.8 GB of the graphics card's memory. Its
+settings are under `[grid]` in `config.toml`:
+
+- `tile_width = 1088`: the width each tile is enlarged to. At 960 the model finds about half the people,
+  so do not go lower.
+- `conf = 0.25`: how sure the model must be before it follows someone. It is lower than the 0.35 used
+  elsewhere, because people in a grid are small and the model is less sure of them. Raise it if you see
+  skeletons on things that are not people.
+
+For seated work, such as assembly benches, also tick **Seated work** in **Settings**. Otherwise bent knees
+under the bench count as a risk.
+
+To start on a grid view, set `tile = "3x3:all"` or `tile = "3x3:5"` under `[camera]` in `config.toml`, or
+send `{"tile": "3x3:all"}` to `POST /settings`.
+
 ---
 
 ## 5. Connecting to the app
@@ -280,7 +303,7 @@ Another port: `.\run.cmd --port 8001`.
 | `GET /videos` | The clips found in `videos/`. |
 | `POST /start` | Body `{"source": "videos/demo.mp4"}`: start a clip, a webcam number (`"0"`) or a stream URL. |
 | `POST /stop` | Stop. |
-| `POST /settings` | Body with any of `privacy`, `seated` (true or false), `bad_hold_s`, `caution_hold_s` (seconds). |
+| `POST /settings` | Body with any of `privacy`, `seated` (true or false), `bad_hold_s`, `caution_hold_s` (seconds), `tile` (`"whole"`, a grid view such as `"3x3:5"`, or every tile with `"3x3:all"`). |
 | `GET /` | The web page. |
 | `GET /docs` | Interactive documentation of all of the above. |
 
@@ -301,6 +324,7 @@ An example while running, shortened to one worker and one region:
   "model": "yolo26m-pose.pt",
   "privacy": false,
   "seated": false,
+  "tile": "whole",
   "time": 41.6,
   "bad_hold_s": 5.0,
   "caution_hold_s": 60.0,
@@ -313,6 +337,7 @@ An example while running, shortened to one worker and one region:
       "held_s": 5.3,
       "flagged": false,
       "view": "front",
+      "tile": null,
       "reba": {"score": 2, "risk": "low", "trunk": 1, "neck": 1, "legs": 1, "upper_arm": 3,
                "lower_arm": 2, "wrist": 1, "activity": 0, "complete": false},
       "regions": {
@@ -323,7 +348,7 @@ An example while running, shortened to one worker and one region:
   ],
   "flags": [
     {"seq": 12, "t": 59.8, "clock": "20:41:07", "worker": 7, "region": "shoulders", "level": "caution",
-     "angle": 69, "held_s": 5.0, "pulses": 1, "message": "Worker 7: arm raised 69° for 5 s"}
+     "angle": 69, "held_s": 5.0, "pulses": 1, "message": "Worker 7: arm raised 69° for 5 s", "tile": null}
   ]
 }
 ```
@@ -338,6 +363,7 @@ An example while running, shortened to one worker and one region:
 | `fps` | Frames processed per second. |
 | `device`, `model` | The GPU (or `CPU`) and the pose model file. |
 | `privacy`, `seated` | The **Skeleton only** and **Seated work** settings. |
+| `tile` | `"whole"`, or the view of a grid recording being analysed, such as `"3x3:5"` or `"3x3:all"`. In a worker or a flag, `tile` is the tile number (1 to 9 in a 3 × 3 grid), or `null` outside the all-tiles view. |
 | `time` | Seconds since **Start**. |
 | `bad_hold_s`, `caution_hold_s` | The current flag times in seconds. |
 | `camera` | `learned`: whether the camera's tilt is known yet. `tilt_deg`: how far it looks down (0 = level). |
@@ -502,7 +528,7 @@ All angles come from 2D points in the picture, after the ceiling-camera correcti
 | Angle | How it is measured | Notes |
 |---|---|---|
 | **Trunk bend** | The line from mid-hip to mid-shoulder, against vertical. Forward is positive. | Leaning back is reported only from a clean side view. Seen from the front, a tilt in the picture is a **sideways bend**. A bend toward the camera is invisible in a flat picture; from a level camera with the legs in view it is estimated from how short the torso looks, from 25° up. |
-| **Neck bend** | The line from shoulders to ears, against the trunk line, minus 10° (in a neutral neck the ear sits a little ahead of the shoulder). | Measured only when the neck is at least 25 pixels long in the picture. From the front, only a sideways tilt is measured. |
+| **Neck bend** | The line from shoulders to ears, against the trunk line, minus 10° (in a neutral neck the ear sits a little ahead of the shoulder). | Measured only when the neck is at least 25 pixels long in the picture. From the front, only a sideways tilt is measured: the line through the ears against the line through the shoulders, so a head bowed over the work is not mistaken for a tilt. A head bowed toward the camera is not measured. |
 | **Upper arm** | The line from shoulder to elbow, against the trunk line pointing down. 0° = arm hanging. | Arm behind the body is told apart only from a side view. Sideways lift (abduction) is counted only from a level camera facing the worker, above 45°. |
 | **Elbow** | The bend at the elbow. 0° = straight arm. | Feeds the REBA lower-arm score: 60 to 100° is best. |
 | **Knee** | The bend at the knee. 0° = straight leg. | The **straighter** knee counts, so walking (one knee bent at a time) is not a crouch. |
@@ -591,7 +617,8 @@ editing it.
 | `[pose]` | The pose model and its speed. `imgsz = 1280` finds small, distant workers in a wide shot; `640` is faster and enough for one person near the camera. Smaller models: `yolo26s-pose.pt`, `yolo26n-pose.pt`. |
 | `[station]` | What the camera cannot see: load, grip, wrist posture, seated work. These change the whole-body REBA score. |
 | `[angles]` | Thresholds for upright, sideways and abduction, how front and side views are told apart, the smallest person and neck that are measured, and smoothing. |
-| `[camera]` | Learn the ceiling-camera tilt, or give it with `tilt_deg`, and the lens's field of view. |
+| `[camera]` | Learn the ceiling-camera tilt, or give it with `tilt_deg`; the lens's field of view; and `tile`, the view to analyse in a grid recording. |
+| `[grid]` | The model, tile size and confidence used when every tile of a grid is analysed at once (see [4.6](#46-recordings-with-several-views-in-a-grid)). |
 | `[timing]` | Flag times, cooldown, and how long workers are kept or ignored (see [6.4](#64-time-and-flags)). |
 | `[levels]` | The REBA part score at which each region turns caution and bad (see [6.2](#62-from-angles-to-safe-caution-and-bad)). |
 
@@ -619,6 +646,7 @@ ErgoTwin/
 │   ├── angles.py            joint angles from body points
 │   ├── reba.py              REBA tables and scoring
 │   ├── posture.py           clocks, flags, and the words for each posture
+│   ├── tiles.py             cuts the views out of a grid recording
 │   ├── draw.py              skeletons and labels on the picture
 │   ├── skeleton.py          the 17 body points
 │   ├── config.py            every setting and its default
@@ -647,13 +675,15 @@ for wrists) can replace it without touching the rest.
 .venv\Scripts\python -m pytest
 ```
 
-There are 141 tests, and they run in about two seconds without a GPU. They cover:
+There are 173 tests, and they run in about two seconds without a GPU. They cover:
 
 - the angle maths, on stick figures with known angles seen from the side and the front;
 - the REBA bands and tables, which were checked cell by cell against the Ergonomics Plus worksheet;
 - the ceiling-camera learning, on crowds drawn as tilted cameras would show them, including crowds that
   lean to try to fool it;
 - the clocks, flags, flag numbers and pod codes;
+- cutting the views out of a grid recording, and drawing each tile's workers back in the right place,
+  with numbers shared across tiles;
 - the pipeline from skeletons to the JSON a worker gets.
 
 They do not test the web page, the video sources or the pose model; those were checked by hand.
@@ -692,6 +722,9 @@ For the limits slide:
 - **Small people.** Workers under 50 pixels tall are not measured, and necks only from 25 pixels. In a wide
   ceiling shot that usually means no neck reading.
 - **Hidden legs.** Behind a bench or boxes the knees are not scored, and the whole-body score is marked partial.
+- **Grid recordings.** Each view is small, so even enlarged, workers bowed low over the nearest bench are
+  sometimes missed. All tiles at once runs at about 4.5 fps, enough for the clocks but not smooth to watch;
+  pick one tile for a smooth picture.
 - **No wrists.** The pose model has no hand points, so the REBA wrist score is a station setting.
 - **Not detected:** standing on one leg, twisting, raised shoulders. Their REBA adjustments are not applied.
 - **Numbers are not identities.** Someone hidden for a few seconds comes back as a new worker. On the

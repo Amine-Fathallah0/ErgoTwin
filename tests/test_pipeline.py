@@ -2,7 +2,7 @@ import pytest
 
 from ergotwin.angles import measure
 from ergotwin.config import AngleConfig, Config
-from ergotwin.pipeline import Pipeline
+from ergotwin.pipeline import NumberPool, Pipeline
 from ergotwin.skeleton import INDEX
 from tests.figures import front_figure, side_figure
 
@@ -103,3 +103,25 @@ def test_a_worker_who_left_is_forgotten():
     assert pipeline.process(10.0, [], SIZE) == {}
     assert pipeline.monitor.workers == {}
     assert run(pipeline, side_figure(trunk=70), 10.1, 12)[1]["held_s"] == pytest.approx(0.9, abs=0.3)
+
+
+def test_tiles_of_a_grid_share_one_set_of_worker_numbers():
+    numbers = NumberPool()
+    left, right = Pipeline(Config(), numbers, tile=1), Pipeline(Config(), numbers, tile=2)
+    a = run(left, side_figure(), 0, 1.5)[1]
+    b = run(right, side_figure(), 0, 1.5)[1]  # the same tracker id, in another tile
+    assert (a["id"], a["tile"]) == (1, 1)
+    assert (b["id"], b["tile"]) == (2, 2)
+
+
+def test_a_flag_says_which_tile_it_came_from():
+    pipeline = Pipeline(Config(), tile=4)
+    run(pipeline, side_figure(trunk=70), 0, 8)
+    assert pipeline.flags and all(flag["tile"] == 4 for flag in pipeline.flags)
+
+
+def test_number_pool_hands_out_the_lowest_free_number():
+    numbers = NumberPool()
+    assert [numbers.take() for _ in range(3)] == [1, 2, 3]
+    numbers.release({2})
+    assert numbers.take() == 2 and numbers.take() == 4

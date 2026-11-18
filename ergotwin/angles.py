@@ -105,7 +105,7 @@ def measure(person: Person, cfg: AngleConfig, min_conf: float, torso_ref: float 
     facing = 0
     if trunk is not None:
         facing = _measure_trunk(out, trunk, shoulder, p, cfg, torso_ref)
-        _measure_neck(out, trunk, shoulder, _mid(p("l_ear"), p("r_ear")), facing, cfg)
+        _measure_neck(out, trunk, shoulder, p, facing, cfg)
 
     for side in SIDES:
         _measure_arm(out, side, p, trunk, facing, cfg, torso_ref, tilted)
@@ -187,13 +187,18 @@ def _measure_trunk(out: Angles, trunk, shoulder, p, cfg: AngleConfig, torso_ref:
     return facing
 
 
-def _measure_neck(out: Angles, trunk, shoulder, ear, facing: int, cfg: AngleConfig) -> None:
+FRONT_NECK_MIN_RATIO = 0.25  # facing the camera, a neck shorter than this share of the torso is bowed toward it
+EAR_GAP_MIN_RATIO = 0.15  # ears closer together than this share of the shoulder width: the head is turned
+
+
+def _measure_neck(out: Angles, trunk, shoulder, p, facing: int, cfg: AngleConfig) -> None:
+    ear = _mid(p("l_ear"), p("r_ear"))
     if ear is None or _length(ear - shoulder) < max(1e-6, cfg.min_neck_px):
         return  # hidden, or too short in the picture for its angle to mean anything
     neck = ear - shoulder
     angle = angle_between(neck, trunk)
     if out.view == "front":
-        out.neck_side_bend = angle  # a nod toward the camera cannot be read from this view
+        _measure_neck_from_front(out, neck, trunk, p)
         return
     out.neck_side_bend = 0.0
     # _cross > 0 means the head leans toward image-right of the trunk line.
@@ -205,6 +210,25 @@ def _measure_neck(out: Angles, trunk, shoulder, ear, facing: int, cfg: AngleConf
     else:
         # Seen at an angle, a head that seems to lean back is mostly the turn of the body.
         out.neck_flexion = 0.0
+
+
+def _measure_neck_from_front(out: Angles, neck, trunk, p) -> None:
+    """Facing the camera, only a sideways tilt of the head can be read, from the ear line.
+
+    A head bowed over the work moves the ears down toward the shoulders and says nothing
+    about a sideways tilt, so the tilt is the angle between the line through the ears and
+    the line through the shoulders, not the direction of the neck.
+    """
+    if _length(neck) < FRONT_NECK_MIN_RATIO * _length(trunk):
+        return  # bowed toward the camera: the bend cannot be measured from this view
+    le, re, ls, rs = p("l_ear"), p("r_ear"), p("l_shoulder"), p("r_shoulder")
+    if le is None or re is None or ls is None or rs is None:
+        return
+    ears, shoulders = le - re, ls - rs
+    if _length(ears) < EAR_GAP_MIN_RATIO * _length(shoulders):
+        return  # head turned to one side: the ear line does not show a tilt
+    tilt = angle_between(ears, shoulders)
+    out.neck_side_bend = min(tilt, 180.0 - tilt)
 
 
 def _measure_arm(out: Angles, side: str, p, trunk, facing: int, cfg: AngleConfig, torso_ref: float | None,
